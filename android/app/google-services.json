@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "457780281844",
+    "project_id": "inbound-genie-app",
+    "storage_bucket": "inbound-genie-app.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:457780281844:android:4a3051079a8a5115c9f9a1",
+        "android_client_info": {
+          "package_name": "com.summonelec.inspectiongenie.inboundgenie"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDobTdEJrM7Si_mMxejCopbtI_RSToD3HA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
