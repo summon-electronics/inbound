@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:inboundgenie/WeightDimensionsPage.dart';
@@ -7,6 +8,9 @@ import 'package:video_player/video_player.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+
+import 'inspection_selection.dart';
+
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:path/path.dart' as p;
 
@@ -15,7 +19,9 @@ import 'StepProgressBar.dart';
 enum Slot { top, bottom, left, right, front, back }
 
 class PackagePage extends StatefulWidget {
-  const PackagePage({super.key});
+  final InspectionSelection selection;
+  final Future<void> Function(Map<String, dynamic> data)? saveMetadata;
+  const PackagePage({super.key, required this.selection, this.saveMetadata});
 
   @override
   State<PackagePage> createState() => _PackagePageState();
@@ -85,14 +91,15 @@ class _PackagePageState extends State<PackagePage> {
   Future<void> _uploadImageForSlot(Slot slot, XFile file) async {
     await _ensureFirebase();
 
-    final prefs = await SharedPreferences.getInstance();
-    final poNumber = prefs.getString('selectedPoNumber') ?? '';
-    final itemId = prefs.getString('selected_item_id') ?? '';
+    final poNumber = widget.selection.poNumber;
+    final itemId = widget.selection.itemId;
 
     if (poNumber.isEmpty) {
       setState(() => _slotUploading[slot] = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No PO selected. Please select a PO first.')),
+        const SnackBar(
+          content: Text('No PO selected. Please select a PO first.'),
+        ),
       );
       return;
     }
@@ -100,7 +107,9 @@ class _PackagePageState extends State<PackagePage> {
     if (itemId.isEmpty) {
       setState(() => _slotUploading[slot] = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No item selected. Please select an item first.')),
+        const SnackBar(
+          content: Text('No item selected. Please select an item first.'),
+        ),
       );
       return;
     }
@@ -180,14 +189,14 @@ class _PackagePageState extends State<PackagePage> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, false),
-              child: const Text(
-                'CANCEL',
-                style: TextStyle(color: Colors.blue),
-              ),
+              child: const Text('CANCEL', style: TextStyle(color: Colors.blue)),
             ),
             TextButton(
               onPressed: () => Navigator.pop(context, true),
-              child: const Text('REPLACE', style: TextStyle(color: Colors.blue),),
+              child: const Text(
+                'REPLACE',
+                style: TextStyle(color: Colors.blue),
+              ),
             ),
           ],
         ),
@@ -227,14 +236,15 @@ class _PackagePageState extends State<PackagePage> {
   Future<void> _uploadVideo(XFile file) async {
     await _ensureFirebase();
 
-    final prefs = await SharedPreferences.getInstance();
-    final poNumber = prefs.getString('selectedPoNumber') ?? '';
-    final itemId = prefs.getString('selected_item_id') ?? '';
+    final poNumber = widget.selection.poNumber;
+    final itemId = widget.selection.itemId;
 
     if (poNumber.isEmpty) {
       setState(() => _videoUploading = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No PO selected. Please select a PO first.')),
+        const SnackBar(
+          content: Text('No PO selected. Please select a PO first.'),
+        ),
       );
       return;
     }
@@ -242,7 +252,9 @@ class _PackagePageState extends State<PackagePage> {
     if (itemId.isEmpty) {
       setState(() => _videoUploading = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No item selected. Please select an item first.')),
+        const SnackBar(
+          content: Text('No item selected. Please select an item first.'),
+        ),
       );
       return;
     }
@@ -420,12 +432,9 @@ class _PackagePageState extends State<PackagePage> {
   }
 
   /// Save metadata to Firestore following the same pattern as WeightDimensionsPage
-  Future<void> _saveToFirestore() async {
-    await _ensureFirebase();
-
-    final prefs = await SharedPreferences.getInstance();
-    final poNumber = prefs.getString('selectedPoNumber') ?? '';
-    final itemId = prefs.getString('selected_item_id') ?? '';
+  Future<void> _saveToFirestore({required bool skipped}) async {
+    final poNumber = widget.selection.poNumber;
+    final itemId = widget.selection.itemId;
 
     if (poNumber.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -435,9 +444,8 @@ class _PackagePageState extends State<PackagePage> {
     }
 
     if (itemId.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No item selected')),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('No item selected')));
       return;
     }
 
@@ -452,16 +460,23 @@ class _PackagePageState extends State<PackagePage> {
         'backImageUrl': _slotImageUrls[Slot.back],
         'packageVideoUrl': _videoUrl,
         'createdAt': FieldValue.serverTimestamp(),
+        'skipped': skipped,
+        'poNumber': poNumber,
+        'itemId': itemId,
       };
 
-      // Save to Firestore under purchase order inspections, named using itemIdCollection
+      if (widget.saveMetadata != null) {
+        await widget.saveMetadata!(data);
+        return;
+      }
+      await _ensureFirebase();
+      // Save to Firestore under purchase order inspections.
       await FirebaseFirestore.instance
           .collection('purchase_orders')
           .doc(poNumber)
           .collection('${itemId}_inspection')
           .doc('package_images')
           .set(data, SetOptions(merge: true));
-
     } catch (e, st) {
       debugPrint('Firestore save error: $e\n$st');
       rethrow;
@@ -469,8 +484,11 @@ class _PackagePageState extends State<PackagePage> {
   }
 
   /// Navigate to next page
-  Future<void> _navigateToNext() async {
-    if (!_areAllMediaUploaded()) {
+  bool _advancing = false;
+
+  Future<void> _navigateToNext({bool skipped = false}) async {
+    if (_advancing) return;
+    if (!skipped && !_areAllMediaUploaded()) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
@@ -492,9 +510,11 @@ class _PackagePageState extends State<PackagePage> {
       return;
     }
 
+    setState(() => _advancing = true);
     try {
-      // Save to Firestore before navigation
-      await _saveToFirestore();
+      await widget.selection.persist(await SharedPreferences.getInstance());
+      await _saveToFirestore(skipped: skipped);
+      if (!mounted) return;
 
       // NAVIGATE AFTER SUCCESSFUL SAVE
       Navigator.push(
@@ -502,9 +522,11 @@ class _PackagePageState extends State<PackagePage> {
         MaterialPageRoute(builder: (_) => const WeightDimensionsPage()),
       );
     } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Failed to save: $e')));
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Failed to save: $e')));
+    } finally {
+      if (mounted) setState(() => _advancing = false);
     }
   }
 
@@ -591,14 +613,9 @@ class _PackagePageState extends State<PackagePage> {
                         width: 2,
                       ),
                     ),
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const WeightDimensionsPage(),
-                        ),
-                      );
-                    },
+                    onPressed: _advancing
+                        ? null
+                        : () => _navigateToNext(skipped: true),
                     child: const Text(
                       'SKIP',
                       style: TextStyle(
@@ -620,7 +637,7 @@ class _PackagePageState extends State<PackagePage> {
                       backgroundColor: const Color(0xFF0070C0),
                       foregroundColor: Colors.white,
                     ),
-                    onPressed: _navigateToNext,
+                    onPressed: _advancing ? null : () => _navigateToNext(),
                     child: const Text(
                       'NEXT STEP',
                       style: TextStyle(
@@ -812,61 +829,61 @@ class _VideoCardState extends State<VideoCard> {
                 ),
                 child: widget.video == null
                     ? const Center(
-                  child: Icon(
-                    Icons.videocam,
-                    size: 48,
-                    color: Colors.grey,
-                  ),
-                )
-                    : Stack(
-                  children: [
-                    ClipRRect(
-                      borderRadius: const BorderRadius.vertical(
-                        top: Radius.circular(16),
-                      ),
-                      child:
-                      _controller != null &&
-                          _controller!.value.isInitialized
-                          ? AspectRatio(
-                        aspectRatio: _controller!.value.aspectRatio,
-                        child: VideoPlayer(_controller!),
+                        child: Icon(
+                          Icons.videocam,
+                          size: 48,
+                          color: Colors.grey,
+                        ),
                       )
-                          : const Center(
-                        child: CircularProgressIndicator(),
-                      ),
-                    ),
-                    if (widget.isUploading)
-                      Container(
-                        color: Colors.black54,
-                        child: const Center(
-                          child: CircularProgressIndicator(
-                            valueColor: AlwaysStoppedAnimation<Color>(
-                              Color(0xFF0070C0),
+                    : Stack(
+                        children: [
+                          ClipRRect(
+                            borderRadius: const BorderRadius.vertical(
+                              top: Radius.circular(16),
+                            ),
+                            child:
+                                _controller != null &&
+                                    _controller!.value.isInitialized
+                                ? AspectRatio(
+                                    aspectRatio: _controller!.value.aspectRatio,
+                                    child: VideoPlayer(_controller!),
+                                  )
+                                : const Center(
+                                    child: CircularProgressIndicator(),
+                                  ),
+                          ),
+                          if (widget.isUploading)
+                            Container(
+                              color: Colors.black54,
+                              child: const Center(
+                                child: CircularProgressIndicator(
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                    Color(0xFF0070C0),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          Positioned(
+                            right: 6,
+                            top: 6,
+                            child: GestureDetector(
+                              onTap: widget.onRemove,
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  color: Colors.black45,
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                padding: const EdgeInsets.all(4),
+                                child: const Icon(
+                                  Icons.close,
+                                  size: 18,
+                                  color: Colors.white,
+                                ),
+                              ),
                             ),
                           ),
-                        ),
+                        ],
                       ),
-                    Positioned(
-                      right: 6,
-                      top: 6,
-                      child: GestureDetector(
-                        onTap: widget.onRemove,
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: Colors.black45,
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          padding: const EdgeInsets.all(4),
-                          child: const Icon(
-                            Icons.close,
-                            size: 18,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
               ),
             ),
             Container(

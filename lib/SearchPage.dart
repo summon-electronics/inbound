@@ -1,13 +1,12 @@
 // search_page.dart
 import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:inboundgenie/PoItemDetailsPage.dart';
-import 'package:mysql1/mysql1.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
-import 'DatabaseConnection.dart';
-import 'dart:convert';
 
+import 'dart:convert';
 
 class PoItem {
   final String purchaseOrderId; // primary id from purchase_orders
@@ -31,11 +30,7 @@ class PoItem {
         final parts = date.split(' ');
         final monthName = parts[1];
         final month = _monthNameToNumberStatic(monthName);
-        return DateTime(
-          int.parse(parts[2]),
-          month,
-          int.parse(parts[0]),
-        );
+        return DateTime(int.parse(parts[2]), month, int.parse(parts[0]));
       }
       // Handle MM/dd/yyyy format
       else if (date.contains('/')) {
@@ -58,8 +53,18 @@ class PoItem {
 
   static int _monthNameToNumberStatic(String monthName) {
     const months = {
-      'Jan': 1, 'Feb': 2, 'Mar': 3, 'Apr': 4, 'May': 5, 'Jun': 6,
-      'Jul': 7, 'Aug': 8, 'Sep': 9, 'Oct': 10, 'Nov': 11, 'Dec': 12
+      'Jan': 1,
+      'Feb': 2,
+      'Mar': 3,
+      'Apr': 4,
+      'May': 5,
+      'Jun': 6,
+      'Jul': 7,
+      'Aug': 8,
+      'Sep': 9,
+      'Oct': 10,
+      'Nov': 11,
+      'Dec': 12,
     };
     return months[monthName] ?? 1;
   }
@@ -138,8 +143,8 @@ class _SearchPageState extends State<SearchPage> {
               // Tune the header/selected colors so they still match your app
               colorScheme: ColorScheme.light(
                 primary: const Color(0xFF0070C0), // header & selected day color
-                onPrimary: Colors.white,           // selected day text color
-                onSurface: Colors.black87,         // day numbers & text
+                onPrimary: Colors.white, // selected day text color
+                onSurface: Colors.black87, // day numbers & text
               ),
               // Buttons (CANCEL / OK) color
               textButtonTheme: TextButtonThemeData(
@@ -197,8 +202,6 @@ class _SearchPageState extends State<SearchPage> {
     }
   }
 
-
-
   Future<void> _fetchPoByDate(String selectedDate) async {
     setState(() {
       _isLoading = true;
@@ -225,7 +228,9 @@ class _SearchPageState extends State<SearchPage> {
             final poId = row['purchase_order_id']?.toString() ?? '';
             final tracking = row['tracking_number']?.toString() ?? '';
 
-            if (poNumber.isNotEmpty && poId.isNotEmpty && !poMap.containsKey(poNumber)) {
+            if (poNumber.isNotEmpty &&
+                poId.isNotEmpty &&
+                !poMap.containsKey(poNumber)) {
               poMap[poNumber] = PoItem(
                 purchaseOrderId: poId,
                 poNumber: poNumber,
@@ -252,14 +257,12 @@ class _SearchPageState extends State<SearchPage> {
       }
     } catch (e, st) {
       debugPrint('Date filter error: $e\n$st');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: ${e.toString()}')),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Error: ${e.toString()}')));
     } finally {
       setState(() => _isLoading = false);
     }
   }
-
 
   Future<void> _onSearch() async {
     final query = _controller.text.trim();
@@ -289,9 +292,14 @@ class _SearchPageState extends State<SearchPage> {
       debugPrint("response: ${response.statusCode}");
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        debugPrint("API Success Response: ${jsonEncode(data)}", wrapWidth: 1024);
+        debugPrint(
+          "API Success Response: ${jsonEncode(data)}",
+          wrapWidth: 1024,
+        );
 
-        if (data['success'] == true && data['purchaseOrders'] != null && data['purchaseOrders'].isNotEmpty) {
+        if (data['success'] == true &&
+            data['purchaseOrders'] != null &&
+            data['purchaseOrders'].isNotEmpty) {
           final poMap = <String, PoItem>{};
 
           for (final row in data['purchaseOrders']) {
@@ -299,7 +307,9 @@ class _SearchPageState extends State<SearchPage> {
             final poId = row['purchase_order_id']?.toString() ?? '';
             final tracking = row['tracking_number']?.toString() ?? '';
 
-            if (poNumber.isNotEmpty && poId.isNotEmpty && !poMap.containsKey(poNumber)) {
+            if (poNumber.isNotEmpty &&
+                poId.isNotEmpty &&
+                !poMap.containsKey(poNumber)) {
               poMap[poNumber] = PoItem(
                 purchaseOrderId: poId,
                 poNumber: poNumber,
@@ -328,14 +338,12 @@ class _SearchPageState extends State<SearchPage> {
       }
     } catch (e) {
       debugPrint('Search error: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: ${e.toString()}')),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Error: ${e.toString()}')));
     } finally {
       setState(() => _isLoading = false);
     }
   }
-
 
   void _onSupplierTextChanged(String text) {
     // Reset displayed PO list until user selects vendor (optional)
@@ -361,7 +369,9 @@ class _SearchPageState extends State<SearchPage> {
   Future<void> _fetchVendorSuggestions(String query) async {
     try {
       final response = await http.get(
-        Uri.parse("https://jellyfish-app-qfsmg.ondigitalocean.app/vendors?q=$query"),
+        Uri.parse(
+          "https://jellyfish-app-qfsmg.ondigitalocean.app/vendors?q=$query",
+        ),
       );
 
       if (response.statusCode == 200) {
@@ -369,10 +379,12 @@ class _SearchPageState extends State<SearchPage> {
 
         if (data['success'] && data['vendors'] != null) {
           final vendors = (data['vendors'] as List)
-              .map((v) => Vendor(
-            id: v['vendor_id'].toString(),
-            name: v['vendor_name'].toString(),
-          ))
+              .map(
+                (v) => Vendor(
+                  id: v['vendor_id'].toString(),
+                  name: v['vendor_name'].toString(),
+                ),
+              )
               .toList();
 
           setState(() {
@@ -400,7 +412,6 @@ class _SearchPageState extends State<SearchPage> {
     }
   }
 
-
   Future<void> _onSelectVendor(Vendor v) async {
     // Fill text field with chosen vendor name and hide suggestions
     _controller.text = v.name;
@@ -417,13 +428,14 @@ class _SearchPageState extends State<SearchPage> {
     await _fetchPosByVendor(v.id);
   }
 
-
   Future<void> _fetchPosByVendor(String vendorId) async {
     setState(() => _isLoading = true);
 
     try {
       final response = await http.get(
-        Uri.parse("https://jellyfish-app-qfsmg.ondigitalocean.app/po/$vendorId"),
+        Uri.parse(
+          "https://jellyfish-app-qfsmg.ondigitalocean.app/po/$vendorId",
+        ),
       );
 
       if (response.statusCode == 200) {
@@ -437,7 +449,9 @@ class _SearchPageState extends State<SearchPage> {
             final poId = row['purchase_order_id']?.toString() ?? '';
             final tracking = row['tracking_number']?.toString() ?? '';
 
-            if (poNumber.isNotEmpty && poId.isNotEmpty && !poMap.containsKey(poNumber)) {
+            if (poNumber.isNotEmpty &&
+                poId.isNotEmpty &&
+                !poMap.containsKey(poNumber)) {
               poMap[poNumber] = PoItem(
                 purchaseOrderId: poId,
                 poNumber: poNumber,
@@ -454,7 +468,9 @@ class _SearchPageState extends State<SearchPage> {
           });
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('No purchase orders found for this supplier')),
+            const SnackBar(
+              content: Text('No purchase orders found for this supplier'),
+            ),
           );
         }
       } else {
@@ -464,33 +480,41 @@ class _SearchPageState extends State<SearchPage> {
       }
     } catch (e, st) {
       debugPrint('fetchPosByVendor error: $e\n$st');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: ${e.toString()}')),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Error: ${e.toString()}')));
     } finally {
       setState(() => _isLoading = false);
     }
   }
 
-
   // ---------------- end supplier logic ----------------
 
   /// Save selected PO & tracking number to SharedPreferences
-  Future<void> _saveSelectedPoToPrefs(PoItem item) async {
+  Future<bool> _saveSelectedPoToPrefs(PoItem item) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('selectedPoNumber', item.poNumber);
+      if (prefs.getString('selectedPurchaseOrderId') != item.purchaseOrderId) {
+        await prefs.remove('selected_item_id');
+      }
+      if (!await prefs.setString('selectedPoNumber', item.poNumber)) {
+        throw StateError('Could not save PO');
+      }
       await prefs.setString('selectedTrackingNumber', item.trackingNumber);
       // optional: you can also store purchaseOrderId if needed:
-      await prefs.setString('selectedPurchaseOrderId', item.purchaseOrderId);
-
-
+      if (!await prefs.setString(
+        'selectedPurchaseOrderId',
+        item.purchaseOrderId,
+      )) {
+        throw StateError('Could not save PO ID');
+      }
+      return true;
     } catch (e) {
       debugPrint('Error saving to prefs: $e');
-      if (!mounted) return;
+      if (!mounted) return false;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed to save selection: ${e.toString()}')),
       );
+      return false;
     }
   }
 
@@ -508,16 +532,36 @@ class _SearchPageState extends State<SearchPage> {
 
   String _getMonthName(int month) {
     const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
     ];
     return months[month - 1];
   }
 
   int _monthNameToNumber(String monthName) {
     const months = {
-      'Jan': 1, 'Feb': 2, 'Mar': 3, 'Apr': 4, 'May': 5, 'Jun': 6,
-      'Jul': 7, 'Aug': 8, 'Sep': 9, 'Oct': 10, 'Nov': 11, 'Dec': 12
+      'Jan': 1,
+      'Feb': 2,
+      'Mar': 3,
+      'Apr': 4,
+      'May': 5,
+      'Jun': 6,
+      'Jul': 7,
+      'Aug': 8,
+      'Sep': 9,
+      'Oct': 10,
+      'Nov': 11,
+      'Dec': 12,
     };
     return months[monthName] ?? 1;
   }
@@ -537,7 +581,10 @@ class _SearchPageState extends State<SearchPage> {
         title: const Text(
           'Search',
           style: TextStyle(
-              fontSize: 18, fontWeight: FontWeight.w600, color: Colors.white),
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
+            color: Colors.white,
+          ),
         ),
         centerTitle: true,
         leading: IconButton(
@@ -597,9 +644,6 @@ class _SearchPageState extends State<SearchPage> {
                       ),
                     ),
 
-
-
-
                     // optional date pill
                     const SizedBox(height: 8),
                     if (_selectedDateDisplay != null)
@@ -608,11 +652,16 @@ class _SearchPageState extends State<SearchPage> {
                         child: Row(
                           children: [
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 8,
+                              ),
                               decoration: BoxDecoration(
                                 color: const Color(0xFFE6F3FF),
                                 borderRadius: BorderRadius.circular(20),
-                                border: Border.all(color: const Color(0xFF0070C0)),
+                                border: Border.all(
+                                  color: const Color(0xFF0070C0),
+                                ),
                               ),
                               child: Row(
                                 children: [
@@ -632,7 +681,11 @@ class _SearchPageState extends State<SearchPage> {
                                         _displayedPoItems = [];
                                       });
                                     },
-                                    child: const Icon(Icons.close, size: 18, color: Color(0xFF0070C0)),
+                                    child: const Icon(
+                                      Icons.close,
+                                      size: 18,
+                                      color: Color(0xFF0070C0),
+                                    ),
                                   ),
                                 ],
                               ),
@@ -649,33 +702,43 @@ class _SearchPageState extends State<SearchPage> {
                           TextField(
                             controller: _controller,
                             decoration: InputDecoration(
-                              hintText: _sortColumn == 'supplier' ? 'Type supplier name' : 'Enter PO or Tracking Number',
+                              hintText: _sortColumn == 'supplier'
+                                  ? 'Type supplier name'
+                                  : 'Enter PO or Tracking Number',
                               // Use explicit borders so focused state shows blue
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(8),
-                                borderSide: BorderSide(color: Theme.of(context).dividerColor),
+                                borderSide: BorderSide(
+                                  color: Theme.of(context).dividerColor,
+                                ),
                               ),
                               enabledBorder: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(8),
-                                borderSide: BorderSide(color: Theme.of(context).dividerColor, width: 1),
+                                borderSide: BorderSide(
+                                  color: Theme.of(context).dividerColor,
+                                  width: 1,
+                                ),
                               ),
                               focusedBorder: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(8),
-                                borderSide: BorderSide(color: Color(0xFF0070C0), width: 2),
+                                borderSide: BorderSide(
+                                  color: Color(0xFF0070C0),
+                                  width: 2,
+                                ),
                               ),
                               prefixIcon: const Icon(Icons.search),
                               suffixIcon: _isLoading
                                   ? SizedBox(
-                                width: 24,
-                                height: 24,
-                                child: Padding(
-                                  padding: const EdgeInsets.all(8),
-                                  // child: CircularProgressIndicator(
-                                  //   strokeWidth: 2,
-                                  //   color: const Color(0xFF0070C0),
-                                  // ),
-                                ),
-                              )
+                                      width: 24,
+                                      height: 24,
+                                      child: Padding(
+                                        padding: const EdgeInsets.all(8),
+                                        // child: CircularProgressIndicator(
+                                        //   strokeWidth: 2,
+                                        //   color: const Color(0xFF0070C0),
+                                        // ),
+                                      ),
+                                    )
                                   : null,
                             ),
                             textInputAction: TextInputAction.search,
@@ -683,7 +746,6 @@ class _SearchPageState extends State<SearchPage> {
                               if (_sortColumn == 'supplier') {
                                 _onSupplierTextChanged(text);
                               }
-
                             },
                             onSubmitted: (_) {
                               if (_sortColumn == 'supplier') {
@@ -700,21 +762,30 @@ class _SearchPageState extends State<SearchPage> {
                           ),
 
                           // suggestions box (shown only when supplier filter is active)
-                          if (_sortColumn == 'supplier' && _showVendorSuggestions)
+                          if (_sortColumn == 'supplier' &&
+                              _showVendorSuggestions)
                             Container(
                               margin: const EdgeInsets.only(top: 8),
-                              constraints: BoxConstraints(maxHeight: height * 0.35),
+                              constraints: BoxConstraints(
+                                maxHeight: height * 0.35,
+                              ),
                               decoration: BoxDecoration(
                                 color: Colors.white,
                                 border: Border.all(color: theme.dividerColor),
                                 borderRadius: BorderRadius.circular(8),
-                                boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 6)],
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black12,
+                                    blurRadius: 6,
+                                  ),
+                                ],
                               ),
                               child: ListView.separated(
                                 padding: EdgeInsets.zero,
                                 shrinkWrap: true,
                                 itemCount: _vendorSuggestions.length,
-                                separatorBuilder: (_, __) => const Divider(height: 1),
+                                separatorBuilder: (_, __) =>
+                                    const Divider(height: 1),
                                 itemBuilder: (context, idx) {
                                   final v = _vendorSuggestions[idx];
                                   return ListTile(
@@ -736,10 +807,14 @@ class _SearchPageState extends State<SearchPage> {
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: const [
-                            Text('PO Number',
-                                style: TextStyle(fontWeight: FontWeight.bold)),
-                            Text('PO Date',
-                                style: TextStyle(fontWeight: FontWeight.bold)),
+                            Text(
+                              'PO Number',
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                            Text(
+                              'PO Date',
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
                           ],
                         ),
                       ),
@@ -754,7 +829,6 @@ class _SearchPageState extends State<SearchPage> {
                           fit: BoxFit.cover,
                         ),
                       )
-
                     else if (_displayedPoItems.isNotEmpty)
                       ListView.separated(
                         physics: const NeverScrollableScrollPhysics(),
@@ -765,9 +839,13 @@ class _SearchPageState extends State<SearchPage> {
                         itemBuilder: (context, index) {
                           final item = _displayedPoItems[index];
                           final selected = index == _selectedIndex;
-                          const lightBlue = Color(0xFFE6F3FF);         // normal item background
-                          const lightBlueSelected = Color(0xFFD6EEF9); // selected item background
-                          const blue = Color(0xFF0070C0);              // selected text color
+                          const lightBlue = Color(
+                            0xFFE6F3FF,
+                          ); // normal item background
+                          const lightBlueSelected = Color(
+                            0xFFD6EEF9,
+                          ); // selected item background
+                          const blue = Color(0xFF0070C0); // selected text color
 
                           return InkWell(
                             onTap: () {
@@ -783,11 +861,13 @@ class _SearchPageState extends State<SearchPage> {
                                 ),
                               ),
                               child: Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
                                 children: [
                                   // Left column: PO Number and PO ID
                                   Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       // PO Number (bold) — blue if selected, black otherwise
                                       Text(
@@ -813,7 +893,9 @@ class _SearchPageState extends State<SearchPage> {
                                         'Tracking: ${item.trackingNumber.isEmpty ? "(none)" : item.trackingNumber}',
                                         style: TextStyle(
                                           fontSize: 12,
-                                          color: selected ? blue : Colors.black54,
+                                          color: selected
+                                              ? blue
+                                              : Colors.black54,
                                         ),
                                       ),
                                     ],
@@ -834,84 +916,85 @@ class _SearchPageState extends State<SearchPage> {
                         },
                       )
                     else if (!_isLoading)
-                        Center(
-                          child: Text(
-                            'No results found',
-                            style: TextStyle(color: theme.disabledColor),
-                          ),
+                      Center(
+                        child: Text(
+                          'No results found',
+                          style: TextStyle(color: theme.disabledColor),
                         ),
+                      ),
                   ],
                 ),
               ),
             ),
-    Padding(
-    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-    child: Column(
-    children: [
-    // Show SEARCH button only if results are not fetched yet
-    if (_showSearchButton)
-    SizedBox(
-    width: double.infinity,
-    height: 48,
-    child: ElevatedButton(
-    onPressed: () async {
-    await _onSearch();
-    setState(() {
-    _showSearchButton = false; // Hide after search results
-    });
-    },
-    style: ElevatedButton.styleFrom(
-    backgroundColor: const Color(0xFF0070C0),
-    shape: RoundedRectangleBorder(
-    borderRadius: BorderRadius.circular(8),
-    ),
-    ),
-    child: const Text(
-    'SEARCH',
-    style: TextStyle(
-    fontSize: 16,
-    fontWeight: FontWeight.w600,
-    color: Colors.white,
-    ),
-    ),
-    ),
-    ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Column(
+                children: [
+                  // Show SEARCH button only if results are not fetched yet
+                  if (_showSearchButton)
+                    SizedBox(
+                      width: double.infinity,
+                      height: 48,
+                      child: ElevatedButton(
+                        onPressed: () async {
+                          await _onSearch();
+                          setState(() {
+                            _showSearchButton =
+                                false; // Hide after search results
+                          });
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF0070C0),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        child: const Text(
+                          'SEARCH',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
 
-    const SizedBox(height: 8),
+                  const SizedBox(height: 8),
 
-    // Show SELECT button only when user selects an item
-    if (_selectedIndex != -1)
-    SizedBox(
-    width: double.infinity,
-    child: ElevatedButton(
-    onPressed: () async {
-    final item = _displayedPoItems[_selectedIndex];
-    await _saveSelectedPoToPrefs(item);
-    _navigateToDetails(item);
-    },
-    style: ElevatedButton.styleFrom(
-    backgroundColor: Colors.white,
-    side: const BorderSide(color: Color(0xFF0070C0)),
-    shape: RoundedRectangleBorder(
-    borderRadius: BorderRadius.circular(8),
-    ),
-    padding: const EdgeInsets.symmetric(vertical: 14),
-    ),
-    child: const Text(
-    'SELECT',
-    style: TextStyle(
-    fontSize: 16,
-    fontWeight: FontWeight.bold,
-    color: Color(0xFF0070C0),
-    ),
-    ),
-    ),
-    ),
-    ],
-    ),
-    ),
-
-    ],
+                  // Show SELECT button only when user selects an item
+                  if (_selectedIndex != -1)
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: () async {
+                          final item = _displayedPoItems[_selectedIndex];
+                          if (await _saveSelectedPoToPrefs(item) && mounted) {
+                            _navigateToDetails(item);
+                          }
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.white,
+                          side: const BorderSide(color: Color(0xFF0070C0)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                        ),
+                        child: const Text(
+                          'SELECT',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF0070C0),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -928,10 +1011,10 @@ class _SearchPageState extends State<SearchPage> {
           color: isActive ? blue : theme.dividerColor,
           width: isActive ? 2 : 1,
         ),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8),
-        ),
-        backgroundColor: isActive ? const Color(0xFFE6F3FF) : null, // light blue highlight
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        backgroundColor: isActive
+            ? const Color(0xFFE6F3FF)
+            : null, // light blue highlight
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
