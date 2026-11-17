@@ -1,5 +1,6 @@
 // WeightDimensionsPage.dart
 import 'dart:io';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -15,14 +16,26 @@ import 'StepProgressBar.dart';
 enum DimensionType { length, height, width }
 
 class WeightDimensionsPage extends StatefulWidget {
-  const WeightDimensionsPage({Key? key}) : super(key: key);
+  // Unknown expectations must remain unknown. The caller may supply verified
+  // PO/package specifications in the same units as the measurement inputs.
+  final double? expectedWeight;
+  final double? expectedLength;
+  final double? expectedHeight;
+  final double? expectedWidth;
+  const WeightDimensionsPage({
+    super.key,
+    this.expectedWeight,
+    this.expectedLength,
+    this.expectedHeight,
+    this.expectedWidth,
+  });
   @override
   State<WeightDimensionsPage> createState() => _WeightDimensionsPageState();
 }
 
 class _WeightDimensionsPageState extends State<WeightDimensionsPage> {
   // Firebase Storage instance
-  final FirebaseStorage _storage = FirebaseStorage.instance;
+  FirebaseStorage get _storage => FirebaseStorage.instance;
 
   // Controllers
   final TextEditingController _weightCtrl = TextEditingController();
@@ -50,10 +63,19 @@ class _WeightDimensionsPageState extends State<WeightDimensionsPage> {
   String? _widthImageUrl;
 
   // Expected values
-  static const int expectedWeight = 20;
-  static const int expectedLength = 14;
-  static const int expectedHeight = 8;
-  static const int expectedWidth = 6;
+  double? get expectedWeight => widget.expectedWeight;
+  double? get expectedLength => widget.expectedLength;
+  double? get expectedHeight => widget.expectedHeight;
+  double? get expectedWidth => widget.expectedWidth;
+  bool get _hasExpectedDims => [
+    expectedLength,
+    expectedHeight,
+    expectedWidth,
+  ].every((value) => value != null && value.isFinite && value > 0);
+  bool get _hasExpectedWeight =>
+      expectedWeight != null && expectedWeight!.isFinite && expectedWeight! > 0;
+  String? _measuredWeight;
+  List<String>? _measuredDims;
 
   // Override flags
   bool _overrideWeight = false;
@@ -161,7 +183,9 @@ class _WeightDimensionsPageState extends State<WeightDimensionsPage> {
 
       if (poNumber.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No PO selected. Please select a PO first.')),
+          const SnackBar(
+            content: Text('No PO selected. Please select a PO first.'),
+          ),
         );
         // reset uploading flag for the type
         _resetUploadingFlag(type);
@@ -170,7 +194,9 @@ class _WeightDimensionsPageState extends State<WeightDimensionsPage> {
 
       if (itemId.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No item selected. Please select an item first.')),
+          const SnackBar(
+            content: Text('No item selected. Please select an item first.'),
+          ),
         );
         _resetUploadingFlag(type);
         return null;
@@ -218,7 +244,9 @@ class _WeightDimensionsPageState extends State<WeightDimensionsPage> {
     } catch (e, st) {
       debugPrint('Error uploading $type image: $e\n$st');
       _resetUploadingFlag(type);
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to upload $type image')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to upload $type image')));
       return null;
     }
   }
@@ -237,7 +265,8 @@ class _WeightDimensionsPageState extends State<WeightDimensionsPage> {
     if (ext == 'jpg' || ext == 'jpeg') return 'image/jpeg';
     if (ext == 'png') return 'image/png';
     if (ext == 'gif') return 'image/gif';
-    if (ext == 'mp4' || ext == 'mov' || ext == 'avi' || ext == 'mkv') return 'video/mp4';
+    if (ext == 'mp4' || ext == 'mov' || ext == 'avi' || ext == 'mkv')
+      return 'video/mp4';
     return 'application/octet-stream';
   }
 
@@ -246,16 +275,19 @@ class _WeightDimensionsPageState extends State<WeightDimensionsPage> {
     await _ensureFirebase();
 
     // Basic validation
-    if (!_overrideWeight && _weightCtrl.text.isEmpty) {
+    if (!_positiveMeasurement(_weightCtrl.text)) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter weight or override it')),
+        const SnackBar(content: Text('Please enter a valid positive weight')),
       );
       return;
     }
-    if (!_overrideDims &&
-        (_lengthCtrl.text.isEmpty || _heightCtrl.text.isEmpty || _widthCtrl.text.isEmpty)) {
+    if (![
+      _lengthCtrl.text,
+      _heightCtrl.text,
+      _widthCtrl.text,
+    ].every(_positiveMeasurement)) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter all dimensions or override them')),
+        const SnackBar(content: Text('Please enter valid positive dimensions')),
       );
       return;
     }
@@ -273,18 +305,31 @@ class _WeightDimensionsPageState extends State<WeightDimensionsPage> {
       }
 
       if (itemId.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No item selected')),
-        );
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('No item selected')));
         return;
       }
 
       // Prepare data
       final data = {
-        'weight': int.tryParse(_weightCtrl.text) ?? expectedWeight,
-        'length': int.tryParse(_lengthCtrl.text) ?? expectedLength,
-        'height': int.tryParse(_heightCtrl.text) ?? expectedHeight,
-        'width': int.tryParse(_widthCtrl.text) ?? expectedWidth,
+        'weight': double.parse(_weightCtrl.text),
+        'length': double.parse(_lengthCtrl.text),
+        'height': double.parse(_heightCtrl.text),
+        'width': double.parse(_widthCtrl.text),
+        'measuredWeight': _overrideWeight
+            ? double.tryParse(_measuredWeight ?? '')
+            : double.parse(_weightCtrl.text),
+        'measuredDimensions': _overrideDims
+            ? _measuredDims?.map(double.tryParse).toList()
+            : [
+                _lengthCtrl.text,
+                _heightCtrl.text,
+                _widthCtrl.text,
+              ].map(double.parse).toList(),
+        'expectedWeight': expectedWeight,
+        'expectedDimensions': _hasExpectedDims
+            ? [expectedLength, expectedHeight, expectedWidth]
+            : null,
         'overrideWeight': _overrideWeight,
         'overrideDimensions': _overrideDims,
         'isDamaged': _isDamaged,
@@ -312,10 +357,14 @@ class _WeightDimensionsPageState extends State<WeightDimensionsPage> {
       );
     } catch (e) {
       debugPrint('Error saving to Firestore: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to save: $e')),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Failed to save: $e')));
     }
+  }
+
+  bool _positiveMeasurement(String text) {
+    final value = double.tryParse(text);
+    return value != null && value.isFinite && value > 0;
   }
 
   @override
@@ -330,15 +379,20 @@ class _WeightDimensionsPageState extends State<WeightDimensionsPage> {
   @override
   Widget build(BuildContext context) {
     // Parse inputs
-    final int? w = int.tryParse(_weightCtrl.text);
-    final bool weightMismatch = w != null && w != expectedWeight;
-    final int? l = int.tryParse(_lengthCtrl.text);
-    final int? h = int.tryParse(_heightCtrl.text);
-    final int? wd = int.tryParse(_widthCtrl.text);
+    final double? w = double.tryParse(_weightCtrl.text);
+    final bool weightMismatch =
+        _hasExpectedWeight && w != null && w != expectedWeight;
+    final double? l = double.tryParse(_lengthCtrl.text);
+    final double? h = double.tryParse(_heightCtrl.text);
+    final double? wd = double.tryParse(_widthCtrl.text);
     final bool dimsEntered =
-        _lengthCtrl.text.isNotEmpty && _heightCtrl.text.isNotEmpty && _widthCtrl.text.isNotEmpty;
+        _lengthCtrl.text.isNotEmpty &&
+        _heightCtrl.text.isNotEmpty &&
+        _widthCtrl.text.isNotEmpty;
     final bool dimsMismatch =
-        dimsEntered && (l != expectedLength || h != expectedHeight || wd != expectedWidth);
+        _hasExpectedDims &&
+        dimsEntered &&
+        (l != expectedLength || h != expectedHeight || wd != expectedWidth);
 
     // Main scaffold with white background
     return Scaffold(
@@ -388,7 +442,11 @@ class _WeightDimensionsPageState extends State<WeightDimensionsPage> {
                             padding: const EdgeInsets.all(16),
                             child: TextField(
                               controller: _weightCtrl,
-                              keyboardType: TextInputType.number,
+                              readOnly: _overrideWeight,
+                              keyboardType:
+                                  const TextInputType.numberWithOptions(
+                                    decimal: true,
+                                  ),
                               decoration: InputDecoration(
                                 labelText: 'Weight (lbs)',
                                 border: const OutlineInputBorder(),
@@ -396,73 +454,94 @@ class _WeightDimensionsPageState extends State<WeightDimensionsPage> {
                                 fillColor: Colors.white,
                                 suffixIcon: _isWeightUploading
                                     ? const Padding(
-                                  padding: EdgeInsets.all(8.0),
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2.0,
-                                    valueColor: AlwaysStoppedAnimation<Color>(
-                                      Color(0xFF0070C0),
-                                    ),
-                                  ),
-                                )
+                                        padding: EdgeInsets.all(8.0),
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2.0,
+                                          valueColor:
+                                              AlwaysStoppedAnimation<Color>(
+                                                Color(0xFF0070C0),
+                                              ),
+                                        ),
+                                      )
                                     : IconButton(
-                                  icon: const Icon(Icons.camera_alt),
-                                  onPressed: () {
-                                    showDialog(
-                                      context: context,
-                                      builder: (_) => Dialog(
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(16),
-                                        ),
-                                        child: Padding(
-                                          padding: const EdgeInsets.all(16),
-                                          child: Column(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              const Text(
-                                                'Pick Weight image',
-                                                style: TextStyle(
-                                                  fontWeight: FontWeight.bold,
+                                        icon: const Icon(Icons.camera_alt),
+                                        onPressed: () {
+                                          showDialog(
+                                            context: context,
+                                            builder: (_) => Dialog(
+                                              shape: RoundedRectangleBorder(
+                                                borderRadius:
+                                                    BorderRadius.circular(16),
+                                              ),
+                                              child: Padding(
+                                                padding: const EdgeInsets.all(
+                                                  16,
+                                                ),
+                                                child: Column(
+                                                  mainAxisSize:
+                                                      MainAxisSize.min,
+                                                  children: [
+                                                    const Text(
+                                                      'Pick Weight image',
+                                                      style: TextStyle(
+                                                        fontWeight:
+                                                            FontWeight.bold,
+                                                      ),
+                                                    ),
+                                                    const SizedBox(height: 16),
+                                                    ListTile(
+                                                      leading: const Icon(
+                                                        Icons.camera_alt,
+                                                        color: Color(
+                                                          0xFF0070C0,
+                                                        ),
+                                                      ),
+                                                      title: const Text(
+                                                        'Camera',
+                                                      ),
+                                                      onTap: () async {
+                                                        Navigator.pop(context);
+                                                        await _pickWeightImage(
+                                                          ImageSource.camera,
+                                                        );
+                                                      },
+                                                    ),
+                                                    ListTile(
+                                                      leading: const Icon(
+                                                        Icons.photo_library,
+                                                        color: Color(
+                                                          0xFF0070C0,
+                                                        ),
+                                                      ),
+                                                      title: const Text(
+                                                        'Gallery',
+                                                      ),
+                                                      onTap: () async {
+                                                        Navigator.pop(context);
+                                                        await _pickWeightImage(
+                                                          ImageSource.gallery,
+                                                        );
+                                                      },
+                                                    ),
+                                                    TextButton(
+                                                      onPressed: () =>
+                                                          Navigator.pop(
+                                                            context,
+                                                          ),
+                                                      child: const Text(
+                                                        'CANCEL',
+                                                        style: TextStyle(
+                                                          color: Colors.red,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ],
                                                 ),
                                               ),
-                                              const SizedBox(height: 16),
-                                              ListTile(
-                                                leading: const Icon(
-                                                  Icons.camera_alt,
-                                                  color: Color(0xFF0070C0),
-                                                ),
-                                                title: const Text('Camera'),
-                                                onTap: () async {
-                                                  Navigator.pop(context);
-                                                  await _pickWeightImage(ImageSource.camera);
-                                                },
-                                              ),
-                                              ListTile(
-                                                leading: const Icon(
-                                                  Icons.photo_library,
-                                                  color: Color(0xFF0070C0),
-                                                ),
-                                                title: const Text('Gallery'),
-                                                onTap: () async {
-                                                  Navigator.pop(context);
-                                                  await _pickWeightImage(ImageSource.gallery);
-                                                },
-                                              ),
-                                              TextButton(
-                                                onPressed: () => Navigator.pop(context),
-                                                child: const Text(
-                                                  'CANCEL',
-                                                  style: TextStyle(
-                                                    color: Colors.red,
-                                                  ),
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
+                                            ),
+                                          );
+                                        },
                                       ),
-                                    );
-                                  },
-                                ),
                               ),
                               onChanged: (_) => setState(() {}),
                             ),
@@ -510,9 +589,10 @@ class _WeightDimensionsPageState extends State<WeightDimensionsPage> {
                                         color: Colors.black54,
                                         child: const Center(
                                           child: CircularProgressIndicator(
-                                            valueColor: AlwaysStoppedAnimation<Color>(
-                                              Color(0xFF0070C0),
-                                            ),
+                                            valueColor:
+                                                AlwaysStoppedAnimation<Color>(
+                                                  Color(0xFF0070C0),
+                                                ),
                                           ),
                                         ),
                                       ),
@@ -520,7 +600,9 @@ class _WeightDimensionsPageState extends State<WeightDimensionsPage> {
                                 ),
                                 Container(
                                   width: double.infinity,
-                                  padding: const EdgeInsets.symmetric(vertical: 12),
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 12,
+                                  ),
                                   decoration: const BoxDecoration(
                                     color: Color(0xFF0070C0),
                                     borderRadius: BorderRadius.only(
@@ -543,8 +625,13 @@ class _WeightDimensionsPageState extends State<WeightDimensionsPage> {
                           ),
                         ],
 
+                        if (!_hasExpectedWeight)
+                          const Text(
+                            'No verified expected weight. Record the measured weight.',
+                          ),
                         // Weight Warning
-                        if (weightMismatch && !_overrideWeight) ...[
+                        if (_hasExpectedWeight &&
+                            (weightMismatch || _overrideWeight)) ...[
                           const SizedBox(height: 16),
                           Card(
                             elevation: 4,
@@ -571,15 +658,23 @@ class _WeightDimensionsPageState extends State<WeightDimensionsPage> {
                                         value: _overrideWeight,
                                         onChanged: (v) {
                                           setState(() {
-                                            _overrideWeight = v ?? false;
-                                            if (_overrideWeight) {
-                                              _weightCtrl.text = expectedWeight.toString();
+                                            if (v == true) {
+                                              _measuredWeight =
+                                                  _weightCtrl.text;
+                                              _weightCtrl.text = expectedWeight
+                                                  .toString();
+                                            } else {
+                                              _weightCtrl.text =
+                                                  _measuredWeight ?? '';
                                             }
+                                            _overrideWeight = v ?? false;
                                           });
                                         },
                                       ),
                                       const Expanded(
-                                        child: Text('Override and set to expected'),
+                                        child: Text(
+                                          'Override and set to expected',
+                                        ),
                                       ),
                                     ],
                                   ),
@@ -610,7 +705,11 @@ class _WeightDimensionsPageState extends State<WeightDimensionsPage> {
                               children: [
                                 TextField(
                                   controller: _lengthCtrl,
-                                  keyboardType: TextInputType.number,
+                                  readOnly: _overrideDims,
+                                  keyboardType:
+                                      const TextInputType.numberWithOptions(
+                                        decimal: true,
+                                      ),
                                   decoration: InputDecoration(
                                     labelText: 'Length (in)',
                                     border: const OutlineInputBorder(),
@@ -618,18 +717,21 @@ class _WeightDimensionsPageState extends State<WeightDimensionsPage> {
                                     fillColor: Colors.white,
                                     suffixIcon: _isLengthUploading
                                         ? const Padding(
-                                      padding: EdgeInsets.all(8.0),
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2.0,
-                                        valueColor: AlwaysStoppedAnimation<Color>(
-                                          Color(0xFF0070C0),
-                                        ),
-                                      ),
-                                    )
+                                            padding: EdgeInsets.all(8.0),
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2.0,
+                                              valueColor:
+                                                  AlwaysStoppedAnimation<Color>(
+                                                    Color(0xFF0070C0),
+                                                  ),
+                                            ),
+                                          )
                                         : IconButton(
-                                      icon: const Icon(Icons.camera_alt),
-                                      onPressed: () => _showImageDialog(DimensionType.length),
-                                    ),
+                                            icon: const Icon(Icons.camera_alt),
+                                            onPressed: () => _showImageDialog(
+                                              DimensionType.length,
+                                            ),
+                                          ),
                                   ),
                                   onChanged: (_) => setState(() {}),
                                 ),
@@ -638,17 +740,24 @@ class _WeightDimensionsPageState extends State<WeightDimensionsPage> {
                                   Stack(
                                     children: [
                                       GestureDetector(
-                                        onTap: () => _showImageDialog(DimensionType.length),
+                                        onTap: () => _showImageDialog(
+                                          DimensionType.length,
+                                        ),
                                         child: Column(
                                           children: [
                                             Container(
                                               height: 100,
                                               decoration: BoxDecoration(
                                                 color: Colors.grey[200],
-                                                borderRadius: const BorderRadius.only(
-                                                  topLeft: Radius.circular(8),
-                                                  topRight: Radius.circular(8),
-                                                ),
+                                                borderRadius:
+                                                    const BorderRadius.only(
+                                                      topLeft: Radius.circular(
+                                                        8,
+                                                      ),
+                                                      topRight: Radius.circular(
+                                                        8,
+                                                      ),
+                                                    ),
                                               ),
                                               child: Image.file(
                                                 _lengthImage!,
@@ -658,14 +767,19 @@ class _WeightDimensionsPageState extends State<WeightDimensionsPage> {
                                             ),
                                             Container(
                                               width: double.infinity,
-                                              padding: const EdgeInsets.symmetric(
-                                                vertical: 8,
-                                              ),
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    vertical: 8,
+                                                  ),
                                               decoration: const BoxDecoration(
                                                 color: Color(0xFF0070C0),
                                                 borderRadius: BorderRadius.only(
-                                                  bottomLeft: Radius.circular(8),
-                                                  bottomRight: Radius.circular(8),
+                                                  bottomLeft: Radius.circular(
+                                                    8,
+                                                  ),
+                                                  bottomRight: Radius.circular(
+                                                    8,
+                                                  ),
                                                 ),
                                               ),
                                               child: const Center(
@@ -687,9 +801,10 @@ class _WeightDimensionsPageState extends State<WeightDimensionsPage> {
                                           color: Colors.black54,
                                           child: const Center(
                                             child: CircularProgressIndicator(
-                                              valueColor: AlwaysStoppedAnimation<Color>(
-                                                Color(0xFF0070C0),
-                                              ),
+                                              valueColor:
+                                                  AlwaysStoppedAnimation<Color>(
+                                                    Color(0xFF0070C0),
+                                                  ),
                                             ),
                                           ),
                                         ),
@@ -716,7 +831,11 @@ class _WeightDimensionsPageState extends State<WeightDimensionsPage> {
                               children: [
                                 TextField(
                                   controller: _heightCtrl,
-                                  keyboardType: TextInputType.number,
+                                  readOnly: _overrideDims,
+                                  keyboardType:
+                                      const TextInputType.numberWithOptions(
+                                        decimal: true,
+                                      ),
                                   decoration: InputDecoration(
                                     labelText: 'Height (in)',
                                     border: const OutlineInputBorder(),
@@ -724,18 +843,21 @@ class _WeightDimensionsPageState extends State<WeightDimensionsPage> {
                                     fillColor: Colors.white,
                                     suffixIcon: _isHeightUploading
                                         ? const Padding(
-                                      padding: EdgeInsets.all(8.0),
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2.0,
-                                        valueColor: AlwaysStoppedAnimation<Color>(
-                                          Color(0xFF0070C0),
-                                        ),
-                                      ),
-                                    )
+                                            padding: EdgeInsets.all(8.0),
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2.0,
+                                              valueColor:
+                                                  AlwaysStoppedAnimation<Color>(
+                                                    Color(0xFF0070C0),
+                                                  ),
+                                            ),
+                                          )
                                         : IconButton(
-                                      icon: const Icon(Icons.camera_alt),
-                                      onPressed: () => _showImageDialog(DimensionType.height),
-                                    ),
+                                            icon: const Icon(Icons.camera_alt),
+                                            onPressed: () => _showImageDialog(
+                                              DimensionType.height,
+                                            ),
+                                          ),
                                   ),
                                   onChanged: (_) => setState(() {}),
                                 ),
@@ -744,17 +866,24 @@ class _WeightDimensionsPageState extends State<WeightDimensionsPage> {
                                   Stack(
                                     children: [
                                       GestureDetector(
-                                        onTap: () => _showImageDialog(DimensionType.height),
+                                        onTap: () => _showImageDialog(
+                                          DimensionType.height,
+                                        ),
                                         child: Column(
                                           children: [
                                             Container(
                                               height: 100,
                                               decoration: BoxDecoration(
                                                 color: Colors.grey[200],
-                                                borderRadius: const BorderRadius.only(
-                                                  topLeft: Radius.circular(8),
-                                                  topRight: Radius.circular(8),
-                                                ),
+                                                borderRadius:
+                                                    const BorderRadius.only(
+                                                      topLeft: Radius.circular(
+                                                        8,
+                                                      ),
+                                                      topRight: Radius.circular(
+                                                        8,
+                                                      ),
+                                                    ),
                                               ),
                                               child: Image.file(
                                                 _heightImage!,
@@ -764,14 +893,19 @@ class _WeightDimensionsPageState extends State<WeightDimensionsPage> {
                                             ),
                                             Container(
                                               width: double.infinity,
-                                              padding: const EdgeInsets.symmetric(
-                                                vertical: 8,
-                                              ),
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    vertical: 8,
+                                                  ),
                                               decoration: const BoxDecoration(
                                                 color: Color(0xFF0070C0),
                                                 borderRadius: BorderRadius.only(
-                                                  bottomLeft: Radius.circular(8),
-                                                  bottomRight: Radius.circular(8),
+                                                  bottomLeft: Radius.circular(
+                                                    8,
+                                                  ),
+                                                  bottomRight: Radius.circular(
+                                                    8,
+                                                  ),
                                                 ),
                                               ),
                                               child: const Center(
@@ -793,9 +927,10 @@ class _WeightDimensionsPageState extends State<WeightDimensionsPage> {
                                           color: Colors.black54,
                                           child: const Center(
                                             child: CircularProgressIndicator(
-                                              valueColor: AlwaysStoppedAnimation<Color>(
-                                                Color(0xFF0070C0),
-                                              ),
+                                              valueColor:
+                                                  AlwaysStoppedAnimation<Color>(
+                                                    Color(0xFF0070C0),
+                                                  ),
                                             ),
                                           ),
                                         ),
@@ -822,7 +957,11 @@ class _WeightDimensionsPageState extends State<WeightDimensionsPage> {
                               children: [
                                 TextField(
                                   controller: _widthCtrl,
-                                  keyboardType: TextInputType.number,
+                                  readOnly: _overrideDims,
+                                  keyboardType:
+                                      const TextInputType.numberWithOptions(
+                                        decimal: true,
+                                      ),
                                   decoration: InputDecoration(
                                     labelText: 'Width (in)',
                                     border: const OutlineInputBorder(),
@@ -830,18 +969,21 @@ class _WeightDimensionsPageState extends State<WeightDimensionsPage> {
                                     fillColor: Colors.white,
                                     suffixIcon: _isWidthUploading
                                         ? const Padding(
-                                      padding: EdgeInsets.all(8.0),
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2.0,
-                                        valueColor: AlwaysStoppedAnimation<Color>(
-                                          Color(0xFF0070C0),
-                                        ),
-                                      ),
-                                    )
+                                            padding: EdgeInsets.all(8.0),
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2.0,
+                                              valueColor:
+                                                  AlwaysStoppedAnimation<Color>(
+                                                    Color(0xFF0070C0),
+                                                  ),
+                                            ),
+                                          )
                                         : IconButton(
-                                      icon: const Icon(Icons.camera_alt),
-                                      onPressed: () => _showImageDialog(DimensionType.width),
-                                    ),
+                                            icon: const Icon(Icons.camera_alt),
+                                            onPressed: () => _showImageDialog(
+                                              DimensionType.width,
+                                            ),
+                                          ),
                                   ),
                                   onChanged: (_) => setState(() {}),
                                 ),
@@ -850,17 +992,24 @@ class _WeightDimensionsPageState extends State<WeightDimensionsPage> {
                                   Stack(
                                     children: [
                                       GestureDetector(
-                                        onTap: () => _showImageDialog(DimensionType.width),
+                                        onTap: () => _showImageDialog(
+                                          DimensionType.width,
+                                        ),
                                         child: Column(
                                           children: [
                                             Container(
                                               height: 100,
                                               decoration: BoxDecoration(
                                                 color: Colors.grey[200],
-                                                borderRadius: const BorderRadius.only(
-                                                  topLeft: Radius.circular(8),
-                                                  topRight: Radius.circular(8),
-                                                ),
+                                                borderRadius:
+                                                    const BorderRadius.only(
+                                                      topLeft: Radius.circular(
+                                                        8,
+                                                      ),
+                                                      topRight: Radius.circular(
+                                                        8,
+                                                      ),
+                                                    ),
                                               ),
                                               child: Image.file(
                                                 _widthImage!,
@@ -870,14 +1019,19 @@ class _WeightDimensionsPageState extends State<WeightDimensionsPage> {
                                             ),
                                             Container(
                                               width: double.infinity,
-                                              padding: const EdgeInsets.symmetric(
-                                                vertical: 8,
-                                              ),
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    vertical: 8,
+                                                  ),
                                               decoration: const BoxDecoration(
                                                 color: Color(0xFF0070C0),
                                                 borderRadius: BorderRadius.only(
-                                                  bottomLeft: Radius.circular(8),
-                                                  bottomRight: Radius.circular(8),
+                                                  bottomLeft: Radius.circular(
+                                                    8,
+                                                  ),
+                                                  bottomRight: Radius.circular(
+                                                    8,
+                                                  ),
                                                 ),
                                               ),
                                               child: const Center(
@@ -899,9 +1053,10 @@ class _WeightDimensionsPageState extends State<WeightDimensionsPage> {
                                           color: Colors.black54,
                                           child: const Center(
                                             child: CircularProgressIndicator(
-                                              valueColor: AlwaysStoppedAnimation<Color>(
-                                                Color(0xFF0070C0),
-                                              ),
+                                              valueColor:
+                                                  AlwaysStoppedAnimation<Color>(
+                                                    Color(0xFF0070C0),
+                                                  ),
                                             ),
                                           ),
                                         ),
@@ -913,8 +1068,13 @@ class _WeightDimensionsPageState extends State<WeightDimensionsPage> {
                           ),
                         ),
 
+                        if (!_hasExpectedDims)
+                          const Text(
+                            'No verified expected dimensions. Record the measured size.',
+                          ),
                         // Dimensions Warning
-                        if (dimsMismatch && !_overrideDims) ...[
+                        if (_hasExpectedDims &&
+                            (dimsMismatch || _overrideDims)) ...[
                           const SizedBox(height: 16),
                           Card(
                             elevation: 4,
@@ -929,7 +1089,7 @@ class _WeightDimensionsPageState extends State<WeightDimensionsPage> {
                                 children: [
                                   Text(
                                     'Expected: ${expectedLength}×${expectedHeight}×${expectedWidth} – '
-                                        'You entered: ${_lengthCtrl.text}×${_heightCtrl.text}×${_widthCtrl.text} ⚠️',
+                                    'You entered: ${_lengthCtrl.text}×${_heightCtrl.text}×${_widthCtrl.text} ⚠️',
                                     style: TextStyle(
                                       fontWeight: FontWeight.bold,
                                       color: Colors.red.shade700,
@@ -942,17 +1102,34 @@ class _WeightDimensionsPageState extends State<WeightDimensionsPage> {
                                         value: _overrideDims,
                                         onChanged: (v) {
                                           setState(() {
-                                            _overrideDims = v ?? false;
-                                            if (_overrideDims) {
-                                              _lengthCtrl.text = expectedLength.toString();
-                                              _heightCtrl.text = expectedHeight.toString();
-                                              _widthCtrl.text = expectedWidth.toString();
+                                            if (v == true) {
+                                              _measuredDims = [
+                                                _lengthCtrl.text,
+                                                _heightCtrl.text,
+                                                _widthCtrl.text,
+                                              ];
+                                              _lengthCtrl.text = expectedLength
+                                                  .toString();
+                                              _heightCtrl.text = expectedHeight
+                                                  .toString();
+                                              _widthCtrl.text = expectedWidth
+                                                  .toString();
+                                            } else if (_measuredDims != null) {
+                                              _lengthCtrl.text =
+                                                  _measuredDims![0];
+                                              _heightCtrl.text =
+                                                  _measuredDims![1];
+                                              _widthCtrl.text =
+                                                  _measuredDims![2];
                                             }
+                                            _overrideDims = v ?? false;
                                           });
                                         },
                                       ),
                                       const Expanded(
-                                        child: Text('Override and set to expected'),
+                                        child: Text(
+                                          'Override and set to expected',
+                                        ),
                                       ),
                                     ],
                                   ),
@@ -994,7 +1171,9 @@ class _WeightDimensionsPageState extends State<WeightDimensionsPage> {
                       ),
                     ),
 
-                    const SizedBox(height: 80), // give space so last content isn't hidden by bottom bar
+                    const SizedBox(
+                      height: 80,
+                    ), // give space so last content isn't hidden by bottom bar
                   ],
                 ),
               ),
@@ -1004,7 +1183,10 @@ class _WeightDimensionsPageState extends State<WeightDimensionsPage> {
             SafeArea(
               top: false,
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16.0,
+                  vertical: 12.0,
+                ),
                 child: Row(
                   children: [
                     Expanded(

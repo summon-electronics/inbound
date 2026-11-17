@@ -46,7 +46,7 @@ dev_dependencies:
 
 flutter:
   assets:
-    - assets/lottie/Search.json
+    - assets/Lottie/Search.json
     - assets/images/inspection_genie.png
     - assets/images/qr_code.png
     - assets/ca/ca-certificate.crt

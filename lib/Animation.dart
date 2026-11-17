@@ -31,7 +31,7 @@ class _SplashTwoState extends State<SplashTwo> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Lottie.asset(
-              'assets/lottie/Search.json',
+              'assets/Lottie/Search.json',
               width: 250,
               height: 250,
               fit: BoxFit.contain,
