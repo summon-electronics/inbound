@@ -2,10 +2,8 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:inboundgenie/PoItemDetailsPage.dart';
-import 'package:mysql1/mysql1.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
-import 'DatabaseConnection.dart';
 import 'dart:convert';
 
 
